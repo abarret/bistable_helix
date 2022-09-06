@@ -1,9 +1,9 @@
 // physical parameters
 De = 1.0
 PI = 3.14159265359
-L   = 40.0                                       // length of computational domain (cm)
-RHO = 1.0e-12                                        // fluid density (g/cm^3)
-MU  = 1.0e-6                                       // fluid viscosity (g/cm*s)
+L   = 40.0                                       // length of computational domain (um)
+RHO = 1.0e-12                                        // fluid density (g/um^3)
+MU  = 1.0e-6                                       // fluid viscosity (g/um*s)
 WI = 0.6 
 XI = 0.5
 KAPPA = 0.001
@@ -70,12 +70,19 @@ ADV_DIFF_CONVECTIVE_TS_TYPE = "TRAPEZOIDAL_RULE"
 ADV_DIFF_CONVECTIVE_FORM = "ADVECTIVE"
 
 Motor {
-Ang_Freq = 2*PI*100.0
-Rot_Dir = -1.0
-X0 = 0.0
-X1 = 0.0
-X2 = 0.3125
-dx = DXFINEST
+   Ang_Freq = 2*PI*100.0
+   Rot_Dir = -1.0
+   X0 = 0.0
+   X1 = 0.0
+   X2 = 0.3125
+   dx = DXFINEST
+}
+
+RodForces {
+   gamma = 1.0e-3      // (g^(1/2) um^(3/2) / s)
+   hook_length = 2
+   tau_2_hook = 0.0    // (1 / um)
+   tau_2_main = 2.1475 // (1 / um)
 }
 
 AdvDiffSemiImplicitHierarchyIntegrator {
@@ -173,37 +180,34 @@ VelocityBcCoefs_2 {
    gcoef_function_4 = "0.0"
    gcoef_function_5 = "0.0"
 }
-ForcingFunction {
-function_0 = "0.0"
-function_1 = "0.0"
-function_2 = "0.0"
+
+ComplexFluid {
+   InitialConditions {
+      function_0 = TT_XX
+      function_1 = TT_YY
+      function_2 = TT_ZZ
+      function_3 = TT_YZ
+      function_4 = TT_XZ
+      function_5 = TT_XY
+      nu = MU/RHO
+   }
+   fluid_model = FLUID_MODEL
+   conformation_tensor = CONFORMATION_TENSOR
+   square_root_evolve  = SQUARE_ROOT_EVOLVE
+   log_conform_evolve  = LOG_CONFORM_EVOLVE
+   error_on_spd        = ERROR_ON_SPD
+   convective_operator_type   = CONVECTIVE_OPERATOR_TYPE
+   log_divergence = LOG_DIVERGENCE
+   log_determinant = LOG_DETERMINANT
+   project_conformation_tensor = PROJECT_CONFORMATION_TENSOR
+   output_stress_tensor = OUTPUT_STRESS_TENSOR
+   output_conformation_tensor = OUTPUT_CONFORMATION_TENSOR
+   relaxation_time = RELAXATION_TIME
+   viscosity = VISCOSITY
+   alpha = 0.3
+   D = 8.0*DXFINEST*DXFINEST
+// NEED BOUNDARY CONDITIONS FOR EXTRA STRESS
 }
-//ComplexFluid {
-InitialConditions {
-function_0 = TT_XX
-function_1 = TT_YY
-function_2 = TT_ZZ
-function_3 = TT_YZ
-function_4 = TT_XZ
-function_5 = TT_XY
-nu = MU/RHO
-}
-fluid_model = FLUID_MODEL
-conformation_tensor = CONFORMATION_TENSOR
-square_root_evolve  = SQUARE_ROOT_EVOLVE
-log_conform_evolve  = LOG_CONFORM_EVOLVE
-error_on_spd        = ERROR_ON_SPD
-convective_operator_type   = CONVECTIVE_OPERATOR_TYPE
-log_divergence = LOG_DIVERGENCE
-log_determinant = LOG_DETERMINANT
-project_conformation_tensor = PROJECT_CONFORMATION_TENSOR
-output_stress_tensor = OUTPUT_STRESS_TENSOR
-output_conformation_tensor = OUTPUT_CONFORMATION_TENSOR
-relaxation_time = RELAXATION_TIME
-viscosity = VISCOSITY
-alpha = 0.3
-D = 8.0*DXFINEST*DXFINEST
-//}
 
 IBHierarchyIntegrator {
    start_time          = START_TIME
@@ -228,13 +232,6 @@ IBStandardInitializer {
    structure_names = "Higdon_helix_150"
    Higdon_helix_150 {
       level_number = MAX_LEVELS - 1
-   }
-   Vertex_pts_5625 {
-      level_number = MAX_LEVELS - 1
-   }
-   Higdon_helix_201 {
-      level_number = MAX_LEVELS - 1
-      uniform_target_stiffness = KAPPA
    }
 }
 

@@ -1,12 +1,12 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 clear;
 % Problem parameters
-L = 10.0;         % length of computational domain (um)
+L = 40.0;         % length of computational domain (um)
 L_s = 6.0;        % Length of swimmer (um)
-N = 128;           % number of Cartesian grid points
+N = 512;           % number of Cartesian grid points
 h = L/N;          % Cartesian grid spacing
 rho = 1.0e-12;        % fluid density (g/um^3)
-mu = 0.01e-4;        % fluid viscosity (g/(um*s))
+mu = 1.0e-6;        % fluid viscosity (g/(um*s))
 
 r0 = 0.2067;        % radius of unstressed rod (um)
 w = -2*pi/2.1361;   % wave number
@@ -26,16 +26,13 @@ b1 = 8.0e-1; % Shear modulus   (g um/s^2)
 b2 = 8.0e-1; % Shear modulus   (g um/s^2)
 b3 = 8.0e-1; % Stretch modulus (g um/s^2)
 
+% Note tau2 and gamma are read into the cpp file.
 kappa2 = 1.3057; % Intrinsic curvature (1/um)
 kappa1 = 0.0;    % Intrinsic curvature (1/um)
 tau1 = -2.1475;  % Right-handed intrinsic twist (1/um)
-tau2 = 2.1475;   % Left-handed intrinisic twist (1/um)
 kappa1_hook = 0.0; % Hook Intrinsic curvature (1/um)
-kappa2_hook = 0.0; % Hook intrinsic curvature (1/um)
+kappa2_hook = 0.0;
 tau1_hook = 0.0; % hook right-handed intrinsic twist (1/um)
-tau2_hook = 0.0; % hook left-handed intrinsic twist (1/um)
-
-gamma = 1.0e-3; % Twist gradient coefficient (g^(1/2) um^(3/2)/s)
 
 nhook = 2;  % Length of hook
 
@@ -121,23 +118,35 @@ axis equal;
 X = [x', y', z'];
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%
+% The first line of each file should be the number of elements.
+% Then files should list the following info:
+% .vertex file:
+% X0, X1, X2
+% .rod file:  %% Note that tau2 and gamma are read in via input file
+% main_idx, next_idx, a1, a2, a3, b1, b2, b3, kappa1, kappa2, tau
+% .director:
+% D1_x, D1_y, D1_z
+% D2_x, D2_y, D2_z
+% D3_x, D3_y, D3_z
+% .anchor file:
+% lag_idx
 vertex_fid = fopen(['Higdon_helix_' num2str(npts) '.vertex'], 'w');
 rod_fid = fopen(['Higdon_helix_' num2str(npts) '.rod'], 'w');
 director_fid = fopen(['Higdon_helix_' num2str(npts) '.director'], 'w');
-target_fid = fopen(['Higdon_helix_' num2str(npts) '.anchor'], 'w');
+anchor_fid = fopen(['Higdon_helix_' num2str(npts) '.anchor'], 'w');
 
 fprintf(vertex_fid, '%d\n', npts);
 fprintf(rod_fid, '%d\n', npts-1);
 fprintf(director_fid, '%d\n', npts);
-fprintf(target_fid, '%d\n', 1);
+fprintf(anchor_fid, '%d\n', 1);
 
-fprintf(target_fid, '%d %1.16e\n', 0);
+fprintf(anchor_fid, '%d %1.16e\n', 0);
 
 for r = 0:nhook-1
     fprintf(vertex_fid, '%1.16e %1.16e %1.16e\n', x(r+1), y(r+1), z(r+1));
     fprintf(rod_fid, ['%6d %6d %1.16e %1.16e %1.16e %1.16e %1.16e %1.16e ' ...
-                    '%1.16e %1.16e %1.16e %1.16e %1.16e %1.16e %1.16e\n'], r, r+1, ds, ...
-          a1_hook, a2_hook, a3_hook, b1, b2, b3, kappa1_hook, kappa2_hook, tau1_hook, tau2_hook, gamma, 1.0);
+                    '%1.16e %1.16e %1.16e %1.16e \n'], r, r+1, ds, ...
+          a1_hook, a2_hook, a3_hook, b1, b2, b3, kappa1_hook, kappa2_hook, tau1_hook);
     fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D1(r+1,1), D1(r+1,2), D1(r+1,3));
     fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D2(r+1,1), D2(r+1,2), D2(r+1,3));
     fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D3(r+1,1), D3(r+1,2), D3(r+1,3));
@@ -146,8 +155,8 @@ for r = nhook:npts-1
   fprintf(vertex_fid, '%1.16e %1.16e %1.16e\n', x(r+1), y(r+1), z(r+1));
   if (r ~= npts-1)
   fprintf(rod_fid, ['%6d %6d %1.16e %1.16e %1.16e %1.16e %1.16e %1.16e ' ...
-                    '%1.16e %1.16e %1.16e %1.16e %1.16e %1.16e %1.16e\n'], r, r+1, ds, ...
-          a1, a2, a3, b1, b2, b3, kappa1, kappa2, tau1, tau2, gamma, 0.0);
+                    '%1.16e %1.16e %1.16e %1.16e \n'], r, r+1, ds, ...
+          a1, a2, a3, b1, b2, b3, kappa1, kappa2, tau1);
   end
 
   fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D1(r+1,1), D1(r+1,2), D1(r+1,3));
@@ -158,5 +167,5 @@ end %for
 fclose(vertex_fid);
 fclose(rod_fid);
 fclose(director_fid);
-fclose(target_fid);
+fclose(anchor_fid);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

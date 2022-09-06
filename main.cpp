@@ -27,23 +27,10 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-// Config files
-#include <IBAMR_config.h>
-#include <IBTK_config.h>
-#include <SAMRAI_config.h>
+#include <ibamr/config.h>
 
-// Headers for basic PETSc functions
-#include <petscsys.h>
-
-// Headers for basic SAMRAI objects
-#include <BergerRigoutsos.h>
-#include <CartesianGridGeometry.h>
-#include <LoadBalancer.h>
-#include <StandardTagAndInitialize.h>
-
-// Headers for application-specific algorithm/data structure objects
-#include "ibamr/CFINSForcing.h"
 #include <ibamr/AdvDiffSemiImplicitHierarchyIntegrator.h>
+#include <ibamr/CFINSForcing.h>
 #include <ibamr/GeneralizedIBMethod.h>
 #include <ibamr/IBExplicitHierarchyIntegrator.h>
 #include <ibamr/IBKirchhoffRodForceGen.h>
@@ -60,13 +47,23 @@
 #include <ibtk/muParserCartGridFunction.h>
 #include <ibtk/muParserRobinBcCoefs.h>
 
-#include "update_triad.h"
+#include <petscsys.h>
 
-#include <stdio.h>
-// Set up application namespace declarations
 #include <unsupported/Eigen/MatrixFunctions>
 
+#include <BergerRigoutsos.h>
+#include <CartesianGridGeometry.h>
+#include <LoadBalancer.h>
+#include <SAMRAI_config.h>
+#include <StandardTagAndInitialize.h>
+#include <stdio.h>
+
 #include <ibamr/app_namespaces.h>
+
+// Local includes
+#include "BistableGenIBMethod.h"
+#include "IBBistableRodForceGen.h"
+#include "update_triad.h"
 
 // Function prototypes
 void output_data(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
@@ -175,7 +172,7 @@ main(int argc, char* argv[])
             TBOX_ERROR("Unsupported solver type: " << solver_type << "\n"
                                                    << "Valid options are: COLLOCATED, STAGGERED");
         }
-        Pointer<GeneralizedIBMethod> ib_method_ops = new GeneralizedIBMethod(
+        Pointer<BistableGenIBMethod> ib_method_ops = new BistableGenIBMethod(
             "GeneralizedIBMethod", app_initializer->getComponentDatabase("GeneralizedIBMethod"));
         Pointer<IBHierarchyIntegrator> time_integrator =
             new IBExplicitHierarchyIntegrator("IBHierarchyIntegrator",
@@ -207,10 +204,11 @@ main(int argc, char* argv[])
         Pointer<IBStandardInitializer> ib_initializer = new IBStandardInitializer(
             "IBStandardInitializer", app_initializer->getComponentDatabase("IBStandardInitializer"));
         ib_method_ops->registerLInitStrategy(ib_initializer);
-        Pointer<IBKirchhoffRodForceGen> ib_force_and_torque_fcn = new IBKirchhoffRodForceGen();
+        Pointer<IBBistableRodForceGen> ib_force_and_torque_fcn =
+            new IBBistableRodForceGen(app_initializer->getComponentDatabase("RodForces"));
         Pointer<IBStandardForceGen> ib_force_fcn = new IBStandardForceGen();
         ib_method_ops->registerIBLagrangianForceFunction(ib_force_fcn);
-        ib_method_ops->registerIBKirchhoffRodForceGen(ib_force_and_torque_fcn);
+        ib_method_ops->registerIBBistableRodForceGen(ib_force_and_torque_fcn);
 
         // Create Eulerian initial condition specification objects.
         if (input_db->keyExists("VelocityInitialConditions"))
@@ -443,6 +441,8 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
                         const double loop_time,
                         const int iteration_num)
 {
+    // Calculate the pitch and radius. Send them to the first processor, then let that processor right the data to a
+    // file.
     const int ln = patch_hierarchy->getFinestLevelNumber();
     const int global_offset = l_data_manager->getGlobalNodeOffset(ln);
     const int local_node_num = l_data_manager->getNumberOfLocalNodes(ln);
@@ -454,7 +454,6 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
     Pointer<LMesh> l_mesh = l_data_manager->getLMesh(ln);
     std::pair<int, int> helix_idxs = l_data_manager->getLagrangianStructureIndexRange(0, ln);
     const std::vector<LNode*>& local_nodes = l_mesh->getLocalNodes();
-    const std::vector<LNode*>& ghost_nodes = l_mesh->getGhostNodes();
 
     std::vector<LNode*> nodes = local_nodes;
     std::vector<int> petsc_curr_node_idxs, petsc_next_idxs, lag_idxs;
@@ -463,10 +462,12 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
     petsc_next_idxs.clear();
     lag_idxs.clear();
     ds_vec.clear();
+    // Loop through the local nodes.
     for (std::vector<LNode*>::const_iterator it = nodes.begin(); it != nodes.end(); ++it)
     {
         const LNode* const node_idx = *it;
         const int& curr_idx = node_idx->getLagrangianIndex();
+        // If the current index is on the helix and is part of a rod...
         if ((curr_idx >= helix_idxs.first) && (curr_idx <= helix_idxs.second) &&
             node_idx->getNodeDataItem<IBRodForceSpec>())
         {
@@ -486,6 +487,8 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
             }
         }
     }
+    // Pitch and radius depends on a derivative... So we need the "next" indices, which may live on a neighboring
+    // processor. Use matrix multiplication with a permutation of the identity matrix to communicate this data.
     l_data_manager->mapLagrangianToPETSc(petsc_curr_node_idxs, ln);
     l_data_manager->mapLagrangianToPETSc(petsc_next_idxs, ln);
     const int local_sz = static_cast<int>(petsc_curr_node_idxs.size());
@@ -558,7 +561,8 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
     IBTK_CHKERRQ(ierr);
     const int D1_offset = 0, D2_offset = 3, D3_offset = 6;
     std::vector<struct_PR> pitch_rad_vals(petsc_curr_node_idxs.size());
-    for (int k = 0; k < petsc_curr_node_idxs.size(); ++k)
+    // Now actually compute the pitch and radius data.
+    for (size_t k = 0; k < petsc_curr_node_idxs.size(); ++k)
     {
         const int idx1 = petsc_curr_node_idxs[k];
         const double ds = ds_vec[k];
@@ -574,6 +578,7 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
         boost::array<Eigen::Map<const Vector3d>*, 3> D = { { &D1, &D2, &D3 } };
         boost::array<Eigen::Map<const Vector3d>*, 3> D_next = { { &D1_next, &D2_next, &D3_next } };
         Matrix3d A(Matrix3d::Zero());
+        // "Interpolate" director vectors using the square root of the rotation matrix.
         for (int i = 0; i < 3; ++i)
         {
             A += (*D_next[i]) * (*D[i]).transpose();
@@ -598,7 +603,7 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
         double tau = om3;
         double kappa = std::sqrt(om1 * om1 + om2 * om2);
         val.R = kappa / (kappa * kappa + tau * tau);
-        val.P = 2 * M_PI * tau / (kappa * kappa + tau * tau);
+        val.P = 2.0 * M_PI * tau / (kappa * kappa + tau * tau);
         pitch_rad_vals[k] = val;
     }
     // Sort vals, Reduce to one processor, print to file.
@@ -614,8 +619,8 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
     int tot = 0;
     for (int i = 0; i < num_nodes; ++i) tot += vals_on_procs[i];
 
-    std::vector<struct_PR> pitch_rad_vals_red;
-    pitch_rad_vals_red.resize(tot);
+    std::vector<struct_PR> pitch_rad_vals_reduced;
+    pitch_rad_vals_reduced.resize(tot);
 
     std::vector<int> displacements(num_nodes);
     displacements[0] = 0;
@@ -624,7 +629,7 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
     MPI_Gatherv(pitch_rad_vals.data(),
                 pitch_rad_vals.size(),
                 tuple,
-                pitch_rad_vals_red.data(),
+                pitch_rad_vals_reduced.data(),
                 vals_on_procs.data(),
                 displacements.data(),
                 tuple,
@@ -633,17 +638,14 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
 
     if (SAMRAI_MPI::getRank() == 0)
     {
-        std::sort(pitch_rad_vals_red.begin(), pitch_rad_vals_red.end(), comparePR);
+        std::sort(pitch_rad_vals_reduced.begin(), pitch_rad_vals_reduced.end(), comparePR);
         ostringstream file_name;
         system("mkdir -p pitch");
         file_name << "pitch/Pitch_" << iteration_num << ".out";
         pitch_file.open(file_name.str().c_str());
-        int i = 0;
-        for (std::vector<struct_PR>::const_iterator it = pitch_rad_vals_red.begin(); it != pitch_rad_vals_red.end();
-             ++it)
+        for (const auto& pitch_rad : pitch_rad_vals_reduced)
         {
-            const struct_PR val = *it;
-            pitch_file << val.idx << " " << val.R << " " << val.P << "\n";
+            pitch_file << pitch_rad.idx << " " << pitch_rad.R << " " << pitch_rad.P << "\n";
         }
         pitch_file.close();
     }
@@ -654,21 +656,19 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
 void
 Build_mpi_type_PR(MPI_Datatype* type)
 {
-    int rank = SAMRAI_MPI::getRank();
+    // struct_PR contains an integer and two doubles. Create an MPI type to correspond to this.
     struct_PR object;
     int struct_length = 3;
     int blocklengths[struct_length];
     MPI_Datatype types[struct_length];
     MPI_Aint displacements[struct_length];
-    blocklengths[0] = blocklengths[1] = blocklengths[2] = blocklengths[3] = 1;
+    blocklengths[0] = blocklengths[1] = blocklengths[2];
     types[0] = MPI_INT;
     types[1] = MPI_DOUBLE;
     types[2] = MPI_DOUBLE;
-    types[3] = MPI_UB;
     displacements[0] = (size_t) & (object.idx) - (size_t)&object;
     displacements[1] = (size_t) & (object.R) - (size_t)&object;
     displacements[2] = (size_t) & (object.P) - (size_t)&object;
-    displacements[3] = sizeof(object);
     MPI_Type_create_struct(struct_length, blocklengths, displacements, types, type);
     MPI_Type_commit(type);
     return;
@@ -680,28 +680,28 @@ calculateTorque(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
                 const double loop_time,
                 const int iteration_num)
 {
+    // Output the torque on the motor. Note GeneralizedIBMethod does not save torque between time steps. This is why
+    // BistableGenIBMethod is introduced.
     const int ln = patch_hierarchy->getFinestLevelNumber();
     const int global_offset = l_data_manager->getGlobalNodeOffset(ln);
-    const int local_node_num = l_data_manager->getNumberOfLocalNodes(ln);
     Pointer<LData> N_data = l_data_manager->getLData("N", ln);
     Vec N_vec = N_data->getVec();
     double* N_vals;
     int ierr = VecGetArray(N_vec, &N_vals);
     IBTK_CHKERRQ(ierr);
     Pointer<LMesh> l_mesh = l_data_manager->getLMesh(ln);
-    std::pair<int, int> helix_idxs = l_data_manager->getLagrangianStructureIndexRange(0, ln);
     const std::vector<LNode*>& nodes = l_mesh->getLocalNodes();
     std::vector<double> torque(NDIM);
     torque[0] = torque[1] = torque[2] = 0.0;
     int petsc_idx;
 
-    for (std::vector<LNode*>::const_iterator it = nodes.begin(); it != nodes.end(); ++it)
+    for (const auto& node : nodes)
     {
-        const LNode* const node_idx = *it;
-        const int curr_idx = node_idx->getLagrangianIndex();
+        const int curr_idx = node->getLagrangianIndex();
+        // The motor is the first rod, so we need the second lagrangian node, which is index "1".
         if (curr_idx == 1)
         {
-            petsc_idx = node_idx->getGlobalPETScIndex();
+            petsc_idx = node->getGlobalPETScIndex();
             Eigen::Map<const Vector3d> N(&N_vals[(petsc_idx - global_offset) * 3]);
             for (int i = 0; i < NDIM; ++i)
             {
