@@ -83,7 +83,7 @@ void calculateTorque(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
                      const double loop_time,
                      const int iteration_num);
 
-void Build_mpi_type_PR(MPI_Datatype* type);
+void build_mpi_type_PR(MPI_Datatype* type);
 
 static std::ofstream pitch_file;
 
@@ -441,7 +441,7 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
                         const double loop_time,
                         const int iteration_num)
 {
-    // Calculate the pitch and radius. Send them to the first processor, then let that processor right the data to a
+    // Calculate the pitch and radius. Send them to the first processor, then let that processor write the data to a
     // file.
     const int ln = patch_hierarchy->getFinestLevelNumber();
     const int global_offset = l_data_manager->getGlobalNodeOffset(ln);
@@ -608,7 +608,7 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
     }
     // Sort vals, Reduce to one processor, print to file.
     MPI_Datatype tuple;
-    Build_mpi_type_PR(&tuple);
+    build_mpi_type_PR(&tuple);
     int tuple_size;
     MPI_Type_size(tuple, &tuple_size);
     int rank = SAMRAI_MPI::getRank();
@@ -654,7 +654,7 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
 }
 
 void
-Build_mpi_type_PR(MPI_Datatype* type)
+build_mpi_type_PR(MPI_Datatype* type)
 {
     // struct_PR contains an integer and two doubles. Create an MPI type to correspond to this.
     struct_PR object;
@@ -662,7 +662,7 @@ Build_mpi_type_PR(MPI_Datatype* type)
     int blocklengths[struct_length];
     MPI_Datatype types[struct_length];
     MPI_Aint displacements[struct_length];
-    blocklengths[0] = blocklengths[1] = blocklengths[2];
+    blocklengths[0] = blocklengths[1] = blocklengths[2] = 1;
     types[0] = MPI_INT;
     types[1] = MPI_DOUBLE;
     types[2] = MPI_DOUBLE;
@@ -691,8 +691,7 @@ calculateTorque(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
     IBTK_CHKERRQ(ierr);
     Pointer<LMesh> l_mesh = l_data_manager->getLMesh(ln);
     const std::vector<LNode*>& nodes = l_mesh->getLocalNodes();
-    std::vector<double> torque(NDIM);
-    torque[0] = torque[1] = torque[2] = 0.0;
+    std::vector<double> torque(NDIM, 0.0);
     int petsc_idx;
 
     for (const auto& node : nodes)
@@ -704,9 +703,7 @@ calculateTorque(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
             petsc_idx = node->getGlobalPETScIndex();
             Eigen::Map<const Vector3d> N(&N_vals[(petsc_idx - global_offset) * 3]);
             for (int i = 0; i < NDIM; ++i)
-            {
                 torque[i] = N(i);
-            }
         }
     }
     SAMRAI_MPI::sumReduction(&torque[0], NDIM);

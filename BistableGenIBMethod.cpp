@@ -222,7 +222,7 @@ BistableGenIBMethod::preprocessIntegrateData(double current_time, double new_tim
         if (!d_l_data_manager->levelContainsLagrangianData(ln)) continue;
         d_D_current_data[ln] = d_l_data_manager->getLData("D", ln);
         d_D_new_data[ln] = d_l_data_manager->createLData("D_new", ln, NDIM * NDIM);
-        d_N_current_data[ln] = d_l_data_manager->createLData("N", ln, NDIM);
+        d_N_current_data[ln] = d_l_data_manager->getLData("N", ln);
         d_N_new_data[ln] = d_l_data_manager->createLData("N_new", ln, NDIM);
         d_W_current_data[ln] = d_l_data_manager->getLData("W", ln);
         d_W_new_data[ln] = d_l_data_manager->createLData("W_new", ln, NDIM);
@@ -679,6 +679,8 @@ BistableGenIBMethod::initializeLevelData(Pointer<BasePatchHierarchy<NDIM> > hier
                                                               /*manage_data*/ true);
         Pointer<LData> W_data = d_l_data_manager->createLData("W", level_number, NDIM, /*manage_data*/ true);
 
+        Pointer<LData> N_data = d_l_data_manager->createLData("N", level_number, NDIM, /*manage_data*/ true);
+
         // 2. Initialize the Lagrangian data.
         static const int global_index_offset = 0;
         static const int local_index_offset = 0;
@@ -699,6 +701,7 @@ BistableGenIBMethod::initializeLevelData(Pointer<BasePatchHierarchy<NDIM> > hier
             d_silo_writer->registerVariableData("D2", D_data, 3, 3, level_number);
             d_silo_writer->registerVariableData("D3", D_data, 6, 3, level_number);
             d_silo_writer->registerVariableData("W", W_data, level_number);
+            d_silo_writer->registerVariableData("N", N_data, level_number);
         }
     }
     return;
