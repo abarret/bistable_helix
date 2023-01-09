@@ -15,6 +15,9 @@ for i = 1:length(files)
     % Determine time
     time = dt * str2double(regexp(files{i}, '\d+', 'match', 'once'));
     fileID = fopen(base_path + "/" + files{i}, 'r');
+    if (fileID == -1)
+        error("Could not open file " + base_path + "/" + files{i});
+    end
     % Should only be one line. Read it.
     data = fscanf(fileID, '%f %f %f');
     fclose(fileID);
