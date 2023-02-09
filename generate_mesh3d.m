@@ -1,5 +1,6 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 clear;
+write_txt_file = 1;
 % Problem parameters
 L = 40.0;         % length of computational domain (um)
 L_s = 6.0;        % Length of swimmer (um)
@@ -109,6 +110,7 @@ end
 
 figure(1); clf; hold on;
 plot3(x,y,z, 'linewidth', 4);
+plot3(x(1:nhook), y(1:nhook), z(1:nhook), 'r', 'linewidth', 4);
 % only draw every q
 q = 10;
 quiver3(x(1:q:end)',y(1:q:end)',z(1:q:end)', D3(1:q:end,1), D3(1:q:end,2), D3(1:q:end,3), 'r', 'linewidth', 2);
@@ -117,55 +119,57 @@ quiver3(x(1:q:end)',y(1:q:end)',z(1:q:end)', D2(1:q:end,1), D2(1:q:end,2), D2(1:
 axis equal;
 X = [x', y', z'];
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%
-% The first line of each file should be the number of elements.
-% Then files should list the following info:
-% .vertex file:
-% X0, X1, X2
-% .rod file:  %% Note that tau2 and gamma are read in via input file
-% main_idx, next_idx, a1, a2, a3, b1, b2, b3, kappa1, kappa2, tau
-% .director:
-% D1_x, D1_y, D1_z
-% D2_x, D2_y, D2_z
-% D3_x, D3_y, D3_z
-% .anchor file:
-% lag_idx
-vertex_fid = fopen(['Higdon_helix_' num2str(npts) '.vertex'], 'w');
-rod_fid = fopen(['Higdon_helix_' num2str(npts) '.rod'], 'w');
-director_fid = fopen(['Higdon_helix_' num2str(npts) '.director'], 'w');
-anchor_fid = fopen(['Higdon_helix_' num2str(npts) '.anchor'], 'w');
+if (write_txt_file == 1)
+    %%
+    % The first line of each file should be the number of elements.
+    % Then files should list the following info:
+    % .vertex file:
+    % X0, X1, X2
+    % .rod file:  %% Note that tau2 and gamma are read in via input file
+    % main_idx, next_idx, a1, a2, a3, b1, b2, b3, kappa1, kappa2, tau
+    % .director:
+    % D1_x, D1_y, D1_z
+    % D2_x, D2_y, D2_z
+    % D3_x, D3_y, D3_z
+    % .anchor file:
+    % lag_idx
+    vertex_fid = fopen(['Higdon_helix_' num2str(npts) '.vertex'], 'w');
+    rod_fid = fopen(['Higdon_helix_' num2str(npts) '.rod'], 'w');
+    director_fid = fopen(['Higdon_helix_' num2str(npts) '.director'], 'w');
+    anchor_fid = fopen(['Higdon_helix_' num2str(npts) '.anchor'], 'w');
 
-fprintf(vertex_fid, '%d\n', npts);
-fprintf(rod_fid, '%d\n', npts-1);
-fprintf(director_fid, '%d\n', npts);
-fprintf(anchor_fid, '%d\n', 1);
+    fprintf(vertex_fid, '%d\n', npts);
+    fprintf(rod_fid, '%d\n', npts-1);
+    fprintf(director_fid, '%d\n', npts);
+    fprintf(anchor_fid, '%d\n', 1);
 
-fprintf(anchor_fid, '%d %1.16e\n', 0);
+    fprintf(anchor_fid, '%d %1.16e\n', 0);
 
-for r = 0:nhook-1
-    fprintf(vertex_fid, '%1.16e %1.16e %1.16e\n', x(r+1), y(r+1), z(r+1));
-    fprintf(rod_fid, ['%6d %6d %1.16e %1.16e %1.16e %1.16e %1.16e %1.16e ' ...
-                    '%1.16e %1.16e %1.16e %1.16e \n'], r, r+1, ds, ...
-          a1_hook, a2_hook, a3_hook, b1, b2, b3, kappa1_hook, kappa2_hook, tau1_hook);
-    fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D1(r+1,1), D1(r+1,2), D1(r+1,3));
-    fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D2(r+1,1), D2(r+1,2), D2(r+1,3));
-    fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D3(r+1,1), D3(r+1,2), D3(r+1,3));
+    for r = 0:nhook-1
+        fprintf(vertex_fid, '%1.16e %1.16e %1.16e\n', x(r+1), y(r+1), z(r+1));
+        fprintf(rod_fid, ['%6d %6d %1.16e %1.16e %1.16e %1.16e %1.16e %1.16e ' ...
+                        '%1.16e %1.16e %1.16e %1.16e \n'], r, r+1, ds, ...
+              a1_hook, a2_hook, a3_hook, b1, b2, b3, kappa1_hook, kappa2_hook, tau1_hook);
+        fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D1(r+1,1), D1(r+1,2), D1(r+1,3));
+        fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D2(r+1,1), D2(r+1,2), D2(r+1,3));
+        fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D3(r+1,1), D3(r+1,2), D3(r+1,3));
+    end
+    for r = nhook:npts-1
+      fprintf(vertex_fid, '%1.16e %1.16e %1.16e\n', x(r+1), y(r+1), z(r+1));
+      if (r ~= npts-1)
+      fprintf(rod_fid, ['%6d %6d %1.16e %1.16e %1.16e %1.16e %1.16e %1.16e ' ...
+                        '%1.16e %1.16e %1.16e %1.16e \n'], r, r+1, ds, ...
+              a1, a2, a3, b1, b2, b3, kappa1, kappa2, tau1);
+      end
+
+      fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D1(r+1,1), D1(r+1,2), D1(r+1,3));
+      fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D2(r+1,1), D2(r+1,2), D2(r+1,3));
+      fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D3(r+1,1), D3(r+1,2), D3(r+1,3));
+    end %for
+
+    fclose(vertex_fid);
+    fclose(rod_fid);
+    fclose(director_fid);
+    fclose(anchor_fid);
 end
-for r = nhook:npts-1
-  fprintf(vertex_fid, '%1.16e %1.16e %1.16e\n', x(r+1), y(r+1), z(r+1));
-  if (r ~= npts-1)
-  fprintf(rod_fid, ['%6d %6d %1.16e %1.16e %1.16e %1.16e %1.16e %1.16e ' ...
-                    '%1.16e %1.16e %1.16e %1.16e \n'], r, r+1, ds, ...
-          a1, a2, a3, b1, b2, b3, kappa1, kappa2, tau1);
-  end
-
-  fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D1(r+1,1), D1(r+1,2), D1(r+1,3));
-  fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D2(r+1,1), D2(r+1,2), D2(r+1,3));
-  fprintf(director_fid, '%1.16e %1.16e %1.16e\n', D3(r+1,1), D3(r+1,2), D3(r+1,3));
-end %for
-
-fclose(vertex_fid);
-fclose(rod_fid);
-fclose(director_fid);
-fclose(anchor_fid);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

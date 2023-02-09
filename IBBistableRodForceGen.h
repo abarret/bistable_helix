@@ -106,6 +106,11 @@ public:
                                          double data_time,
                                          IBTK::LDataManager* l_data_manager);
 
+    const IBTK::VectorNd& getTorque()
+    {
+        return d_torque;
+    };
+
 private:
     /*!
      * \brief Copy constructor.
@@ -164,6 +169,8 @@ private:
     double d_gamma = std::numeric_limits<double>::quiet_NaN();
     // Number of rods on the hook.
     int d_hook_length = -1;
+
+    IBTK::VectorNd d_torque;
 };
 } // namespace IBAMR
 

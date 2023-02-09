@@ -1,6 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.15.0)
 
-PROJECT(bistable_helix LANGUAGES C CXX)
+PROJECT(bistable_helix LANGUAGES C CXX Fortran)
 FIND_PACKAGE(IBAMR REQUIRED)
 
 SET(CXX_SRC BistableGenIBMethod.cpp IBBistableRodForceGen.cpp update_triad.cpp)

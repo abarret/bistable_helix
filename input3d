@@ -1,17 +1,17 @@
 // physical parameters
-De = 1.0
+De = 0.5
 PI = 3.14159265359
-L   = 40.0                                       // length of computational domain (um)
-RHO = 1.0e-12                                        // fluid density (g/um^3)
-MU  = 1.0e-6                                       // fluid viscosity (g/um*s)
+L   = 20.0                                       // length of computational domain (cm)
+RHO = 1.0e-12                                        // fluid density (g/cm^3)
+MU  = 6.667e-7                                       // fluid viscosity (g/cm*s)
 WI = 0.6 
 XI = 0.5
 KAPPA = 0.001
 // grid spacing parameters
-MAX_LEVELS = 5                                   // number of levels in locally refined grid
+MAX_LEVELS = 4                                   // number of levels in locally refined grid
 REF_RATIO  = 4                                   // refinement ratio between levels
 N = 8  // COARSEST LEVEL
-NFINEST = 2*2*N*4*4
+NFINEST = 4*N*4*4
 DXFINEST = L/NFINEST
 
 CONFORMATION_TENSOR = TRUE
@@ -26,13 +26,21 @@ PROJECT_CONFORMATION_TENSOR = TRUE
 LOG_DETERMINANT = TRUE
 LOG_DIVERGENCE = TRUE
 RELAXATION_TIME = De/100
-VISCOSITY = 5.0e-7
+VISCOSITY = 3.333e-7
+
+VIZ_DUMP_TIME_INTERVAL = 0.0005
+DT_INIT = 1.0e-7
+DT_MAX = 1.0e-5
+DT_MIN = 1.0e-7
+T_SWITCH = 1.0e-4
+CFL_MAX_NEW = 0.005
+CFL_MAX = 0.25
 
 // solver parameters
 VISCOUS_TS_TYPE     = "BACKWARD_EULER"
 NORMALIZE_VELOCITY  = FALSE
 // DELTA_FUNCTION      = "USER_DEFINED"
-DELTA_FUNCTION = "IB_4"
+DELTA_FUNCTION = "BSPLINE_3"
 W                   = 4.0 * NFINEST / 64.0       // delta function width --- 4 meshwidths at NFINEST = 64
 SOLVER_TYPE         = "STAGGERED"                // the fluid solver to use (STAGGERED or COLLOCATED)
 START_TIME          = 0.0e0                      // initial simulation time
@@ -44,7 +52,6 @@ CONVECTIVE_OP_TYPE  = "PPM"                      // convective differencing disc
 CONVECTIVE_FORM     = "ADVECTIVE"                // how to compute the convective terms
 NORMALIZE_PRESSURE  = TRUE                       // whether to explicitly force the pressure to have mean zero
 CFL_MAX             = 0.25                       // maximum CFL number
-DT                  = 1.0e-7                     // maximum time step
 VIZ_OUT_INT         = int(0.0005/DT)                       // output visualization interval
 VIZ_OUT_DIR_NAME    = "viz"                     // output directory
 ERROR_ON_DT_CHANGE  = TRUE                       // whether to emit an error message if the time step size changes
@@ -70,19 +77,19 @@ ADV_DIFF_CONVECTIVE_TS_TYPE = "TRAPEZOIDAL_RULE"
 ADV_DIFF_CONVECTIVE_FORM = "ADVECTIVE"
 
 Motor {
-   Ang_Freq = 2*PI*100.0
-   Rot_Dir = -1.0
-   X0 = 0.0
-   X1 = 0.0
-   X2 = 0.3125
-   dx = DXFINEST
+Ang_Freq = 2*PI*100.0
+Rot_Dir = 1.0
+X0 = 0.0
+X1 = 0.0
+X2 = 0.3125
+dx = DXFINEST
 }
 
 RodForces {
-   gamma = 1.0e-3      // (g^(1/2) um^(3/2) / s)
+   gamma = 1.0e-3
    hook_length = 2
-   tau_2_hook = 0.0    // (1 / um)
-   tau_2_main = 2.1475 // (1 / um)
+   tau_2_hook = 0.0
+   tau_2_main = 2.1475
 }
 
 AdvDiffSemiImplicitHierarchyIntegrator {
@@ -93,9 +100,11 @@ AdvDiffSemiImplicitHierarchyIntegrator {
  convective_time_stepping_type = ADV_DIFF_CONVECTIVE_TS_TYPE
  convective_op_type = ADV_DIFF_CONVECTIVE_OP_TYPE
  convective_difference_form = ADV_DIFF_CONVECTIVE_FORM
- cfl = CFL_MAX
- dt_max = DT
- tag_buffer = TAG_BUFFER
+   cfl = CFL_MAX
+   dt_max                        = DT_MAX
+   dt_min                        = DT_MIN
+   dt_init                       = DT_INIT 
+tag_buffer = TAG_BUFFER
  enable_logging = ENABLE_LOGGING
 }
 
@@ -180,33 +189,168 @@ VelocityBcCoefs_2 {
    gcoef_function_4 = "0.0"
    gcoef_function_5 = "0.0"
 }
-
+ForcingFunction {
+function_0 = "0.0"
+function_1 = "0.0"
+function_2 = "0.0"
+}
 ComplexFluid {
-   InitialConditions {
-      function_0 = TT_XX
-      function_1 = TT_YY
-      function_2 = TT_ZZ
-      function_3 = TT_YZ
-      function_4 = TT_XZ
-      function_5 = TT_XY
-      nu = MU/RHO
-   }
-   fluid_model = FLUID_MODEL
-   conformation_tensor = CONFORMATION_TENSOR
-   square_root_evolve  = SQUARE_ROOT_EVOLVE
-   log_conform_evolve  = LOG_CONFORM_EVOLVE
-   error_on_spd        = ERROR_ON_SPD
-   convective_operator_type   = CONVECTIVE_OPERATOR_TYPE
-   log_divergence = LOG_DIVERGENCE
-   log_determinant = LOG_DETERMINANT
-   project_conformation_tensor = PROJECT_CONFORMATION_TENSOR
-   output_stress_tensor = OUTPUT_STRESS_TENSOR
-   output_conformation_tensor = OUTPUT_CONFORMATION_TENSOR
-   relaxation_time = RELAXATION_TIME
-   viscosity = VISCOSITY
-   alpha = 0.3
-   D = 8.0*DXFINEST*DXFINEST
-// NEED BOUNDARY CONDITIONS FOR EXTRA STRESS
+InitialConditions {
+function_0 = TT_XX
+function_1 = TT_YY
+function_2 = TT_ZZ
+function_3 = TT_YZ
+function_4 = TT_XZ
+function_5 = TT_XY
+nu = MU/RHO
+}
+fluid_model = FLUID_MODEL
+conformation_tensor = CONFORMATION_TENSOR
+square_root_evolve  = SQUARE_ROOT_EVOLVE
+log_conform_evolve  = LOG_CONFORM_EVOLVE
+error_on_spd        = ERROR_ON_SPD
+convective_operator_type   = CONVECTIVE_OPERATOR_TYPE
+log_divergence = LOG_DIVERGENCE
+log_determinant = LOG_DETERMINANT
+project_conformation_tensor = PROJECT_CONFORMATION_TENSOR
+output_stress_tensor = OUTPUT_STRESS_TENSOR
+output_conformation_tensor = OUTPUT_CONFORMATION_TENSOR
+relaxation_time = RELAXATION_TIME
+viscosity = VISCOSITY
+alpha = 0.3
+D = 8.0*DXFINEST*DXFINEST
+ExtraStressBoundaryConditions_0 {
+   acoef_function_0 = "1.0"
+   acoef_function_1 = "1.0"
+   acoef_function_2 = "1.0"
+   acoef_function_3 = "1.0"
+   acoef_function_4 = "1.0"
+   acoef_function_5 = "1.0"
+
+   bcoef_function_0 = "0.0"
+   bcoef_function_1 = "0.0"
+   bcoef_function_2 = "0.0"
+   bcoef_function_3 = "0.0"
+   bcoef_function_4 = "0.0"
+   bcoef_function_5 = "0.0"
+
+   gcoef_function_0 = "1.0"
+   gcoef_function_1 = "1.0"
+   gcoef_function_2 = "1.0"
+   gcoef_function_3 = "1.0"
+   gcoef_function_4 = "1.0"
+   gcoef_function_5 = "1.0"
+}
+ExtraStressBoundaryConditions_1 {
+   acoef_function_0 = "1.0"
+   acoef_function_1 = "1.0"
+   acoef_function_2 = "1.0"
+   acoef_function_3 = "1.0"
+   acoef_function_4 = "1.0"
+   acoef_function_5 = "1.0"
+
+   bcoef_function_0 = "0.0"
+   bcoef_function_1 = "0.0"
+   bcoef_function_2 = "0.0"
+   bcoef_function_3 = "0.0"
+   bcoef_function_4 = "0.0"
+   bcoef_function_5 = "0.0"
+
+   gcoef_function_0 = "1.0"
+   gcoef_function_1 = "1.0"
+   gcoef_function_2 = "1.0"
+   gcoef_function_3 = "1.0"
+   gcoef_function_4 = "1.0"
+   gcoef_function_5 = "1.0"
+}
+ExtraStressBoundaryConditions_2 {
+   acoef_function_0 = "1.0"
+   acoef_function_1 = "1.0"
+   acoef_function_2 = "1.0"
+   acoef_function_3 = "1.0"
+   acoef_function_4 = "1.0"
+   acoef_function_5 = "1.0"
+
+   bcoef_function_0 = "0.0"
+   bcoef_function_1 = "0.0"
+   bcoef_function_2 = "0.0"
+   bcoef_function_3 = "0.0"
+   bcoef_function_4 = "0.0"
+   bcoef_function_5 = "0.0"
+
+   gcoef_function_0 = "1.0"
+   gcoef_function_1 = "1.0"
+   gcoef_function_2 = "1.0"
+   gcoef_function_3 = "1.0"
+   gcoef_function_4 = "1.0"
+   gcoef_function_5 = "1.0"
+}
+ExtraStressBoundaryConditions_3 {
+   acoef_function_0 = "1.0"
+   acoef_function_1 = "1.0"
+   acoef_function_2 = "1.0"
+   acoef_function_3 = "1.0"
+   acoef_function_4 = "1.0"
+   acoef_function_5 = "1.0"
+
+   bcoef_function_0 = "0.0"
+   bcoef_function_1 = "0.0"
+   bcoef_function_2 = "0.0"
+   bcoef_function_3 = "0.0"
+   bcoef_function_4 = "0.0"
+   bcoef_function_5 = "0.0"
+
+   gcoef_function_0 = "0.0"
+   gcoef_function_1 = "0.0"
+   gcoef_function_2 = "0.0"
+   gcoef_function_3 = "0.0"
+   gcoef_function_4 = "0.0"
+   gcoef_function_5 = "0.0"
+}
+ExtraStressBoundaryConditions_4 {
+   acoef_function_0 = "1.0"
+   acoef_function_1 = "1.0"
+   acoef_function_2 = "1.0"
+   acoef_function_3 = "1.0"
+   acoef_function_4 = "1.0"
+   acoef_function_5 = "1.0"
+
+   bcoef_function_0 = "0.0"
+   bcoef_function_1 = "0.0"
+   bcoef_function_2 = "0.0"
+   bcoef_function_3 = "0.0"
+   bcoef_function_4 = "0.0"
+   bcoef_function_5 = "0.0"
+
+   gcoef_function_0 = "0.0"
+   gcoef_function_1 = "0.0"
+   gcoef_function_2 = "0.0"
+   gcoef_function_3 = "0.0"
+   gcoef_function_4 = "0.0"
+   gcoef_function_5 = "0.0"
+}
+ExtraStressBoundaryConditions_5 {
+   acoef_function_0 = "1.0"
+   acoef_function_1 = "1.0"
+   acoef_function_2 = "1.0"
+   acoef_function_3 = "1.0"
+   acoef_function_4 = "1.0"
+   acoef_function_5 = "1.0"
+
+   bcoef_function_0 = "0.0"
+   bcoef_function_1 = "0.0"
+   bcoef_function_2 = "0.0"
+   bcoef_function_3 = "0.0"
+   bcoef_function_4 = "0.0"
+   bcoef_function_5 = "0.0"
+
+   gcoef_function_0 = "0.0"
+   gcoef_function_1 = "0.0"
+   gcoef_function_2 = "0.0"
+   gcoef_function_3 = "0.0"
+   gcoef_function_4 = "0.0"
+   gcoef_function_5 = "0.0"
+}
 }
 
 IBHierarchyIntegrator {
@@ -215,7 +359,9 @@ IBHierarchyIntegrator {
    grow_dt             = GROW_DT
    num_cycles          = NUM_CYCLES
    regrid_cfl_interval = REGRID_CFL_INTERVAL
-   dt_max              = DT
+   dt_max                        = DT_MAX
+   dt_min                        = DT_MIN
+   dt_init                       = DT_INIT
    error_on_dt_change  = ERROR_ON_DT_CHANGE
    tag_buffer          = TAG_BUFFER
    enable_logging      = ENABLE_LOGGING
@@ -229,9 +375,16 @@ GeneralizedIBMethod {
 
 IBStandardInitializer {
    max_levels = MAX_LEVELS
-   structure_names = "Higdon_helix_150"
-   Higdon_helix_150 {
+   structure_names = "Higdon_helix_101"
+   Higdon_helix_101 {
       level_number = MAX_LEVELS - 1
+   }
+   Vertex_pts_5625 {
+      level_number = MAX_LEVELS - 1
+   }
+   Higdon_helix_201 {
+      level_number = MAX_LEVELS - 1
+      uniform_target_stiffness = KAPPA
    }
 }
 
@@ -249,7 +402,9 @@ INSStaggeredHierarchyIntegrator {
    normalize_pressure            = NORMALIZE_PRESSURE
    num_cycles                    = NUM_CYCLES
    cfl                           = CFL_MAX
-   dt_max                        = DT
+   dt_max                        = DT_MAX
+   dt_min                        = DT_MIN
+   dt_init                       = DT_INIT
    using_vorticity_tagging       = VORTICITY_TAGGING
    vorticity_rel_thresh          = 0.25,0.125,0.0625
    tag_buffer                    = TAG_BUFFER
@@ -330,7 +485,7 @@ Main {
    visit_number_procs_per_file = 1
 
 // restart dump parameters
-   restart_dump_interval       = 0
+   restart_dump_interval       = VIZ_OUT_INT
    restart_dump_dirname        = "restart_IB3d"
 
 // hierarchy data dump parameters
@@ -345,14 +500,14 @@ CartesianGeometry {
    domain_boxes = [ (0,0,0),(N - 1,N - 1,N - 1) ]
    x_lo = -0.5*L,-0.5*L,-0.4*L
    x_up =  0.5*L, 0.5*L, 0.6*L
-   periodic_dimension = 1,1,1
+   periodic_dimension = 0,0,0
 }
 
 GriddingAlgorithm {
    max_levels = MAX_LEVELS
    ratio_to_coarser {
       level_1 = 2,2,2//REF_RATIO,REF_RATIO,REF_RATIO
-      level_2 = 2,2,2//REF_RATIO,REF_RATIO,REF_RATIO
+      level_2 = REF_RATIO,REF_RATIO,REF_RATIO
       level_3 = REF_RATIO,REF_RATIO,REF_RATIO
       level_4 = REF_RATIO,REF_RATIO,REF_RATIO
       level_5 = REF_RATIO,REF_RATIO,REF_RATIO 
@@ -378,8 +533,8 @@ LoadBalancer {
 }
 
 TimerManager{
-   print_exclusive = FALSE
+   print_exclusive = TRUE
    print_total     = TRUE
-   print_threshold = 0.1
-   timer_list      = "IBAMR::*::*","IBTK::*::*","*::*::*"
+   print_threshold = 0.0
+   timer_list      = "IBAMR::*::*","IBTK::*::*"
 }

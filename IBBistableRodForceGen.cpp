@@ -470,6 +470,7 @@ IBBistableRodForceGen::computeLagrangianForceAndTorque(Pointer<LData> F_data,
                                                        LDataManager* const l_data_manager)
 {
     if (!l_data_manager->levelContainsLagrangianData(level_number)) return;
+    d_torque.setZero();
 
     IBAMR_TIMER_START(t_compute_lagrangian_force_and_torque);
 
@@ -738,7 +739,13 @@ IBBistableRodForceGen::computeLagrangianForceAndTorque(Pointer<LData> F_data,
         Eigen::Map<Vector3d> N_next(&N_next_node_vals[k * NDIM]);
         N_curr = N_half + 0.5 * ((X_next - X)).cross(F_half);
         N_next = -N_half + 0.5 * ((X_next - X)).cross(F_half);
+
+        // If we are on lag index 0, output the torque
+        if (lag_node_idxs[k] == 0)
+            for (int d = 0; d < NDIM; ++d) d_torque[d] = N_curr[d];
     }
+
+    SAMRAI_MPI::sumReduction(d_torque.data(), NDIM);
 
     ierr = VecRestoreArray(D_vec, &D_vals);
     IBTK_CHKERRQ(ierr);

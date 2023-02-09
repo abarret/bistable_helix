@@ -81,7 +81,8 @@ void calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
 void calculateTorque(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
                      LDataManager* l_data_manager,
                      const double loop_time,
-                     const int iteration_num);
+                     const int iteration_num,
+                     Pointer<IBBistableRodForceGen> ib_force_fcn);
 
 void build_mpi_type_PR(MPI_Datatype* type);
 
@@ -300,28 +301,54 @@ main(int argc, char* argv[])
         // Write out initial visualization data.
         int iteration_num = time_integrator->getIntegratorStep();
         double loop_time = time_integrator->getIntegratorTime();
-        if (dump_viz_data && uses_visit)
-        {
-            pout << "\n\nWriting visualization files...\n\n";
-            time_integrator->setupPlotData();
-            visit_data_writer->writePlotData(patch_hierarchy, iteration_num, loop_time);
-            silo_data_writer->writePlotData(iteration_num, loop_time);
-        }
 
         // Main time step loop.
         double loop_time_end = time_integrator->getEndTime();
         double dt = 0.0;
+        double viz_dump_time_interval = input_db->getDouble("VIZ_DUMP_TIME_INTERVAL");
+        double next_viz_dump_time = 0.0;
+        double dt_max_init = input_db->getDouble("DT_INIT");
+        double t_switch = input_db->getDouble("T_SWITCH");
+        while (loop_time > 0.0 &&
+               (next_viz_dump_time < loop_time || MathUtilities<double>::equalEps(loop_time, next_viz_dump_time)))
+        {
+            next_viz_dump_time += viz_dump_time_interval;
+        }
+
         while (!MathUtilities<double>::equalEps(loop_time, loop_time_end) && time_integrator->stepsRemaining())
         {
             iteration_num = time_integrator->getIntegratorStep();
             loop_time = time_integrator->getIntegratorTime();
+            if (dump_viz_data &&
+                (MathUtilities<double>::equalEps(loop_time, next_viz_dump_time) || loop_time >= next_viz_dump_time))
+            {
+                pout << "\nWriting visualization files...\n\n";
+                time_integrator->setupPlotData();
+                visit_data_writer->writePlotData(patch_hierarchy, iteration_num, loop_time);
+                silo_data_writer->writePlotData(iteration_num, loop_time);
+                calculatePitchAndRadius(patch_hierarchy, ib_method_ops->getLDataManager(), loop_time, iteration_num);
+                calculateTorque(patch_hierarchy,
+                                ib_method_ops->getLDataManager(),
+                                loop_time,
+                                iteration_num,
+                                ib_force_and_torque_fcn);
+                next_viz_dump_time += viz_dump_time_interval;
+            }
 
             pout << "\n";
             pout << "+++++++++++++++++++++++++++++++++++++++++++++++++++\n";
             pout << "At beginning of timestep # " << iteration_num << "\n";
             pout << "Simulation time is " << loop_time << "\n";
 
-            dt = time_integrator->getMaximumTimeStepSize();
+            if (loop_time > t_switch)
+            {
+                navier_stokes_integrator->setCFLMax(input_db->getDouble("CFL_MAX_NEW"));
+                dt = time_integrator->getMaximumTimeStepSize();
+            }
+            else
+            {
+                dt = dt_max_init;
+            }
             update_triad(patch_hierarchy, ib_method_ops->getLDataManager(), loop_time, dt, params, iteration_num);
             time_integrator->advanceHierarchy(dt);
             loop_time += dt;
@@ -337,23 +364,6 @@ main(int argc, char* argv[])
             // processing.
             iteration_num += 1;
             const bool last_step = !time_integrator->stepsRemaining();
-            /*
-                        if (last_step)
-                        {
-                            output_new_files(patch_hierarchy,
-               ib_method_ops->getLDataManager(), loop_time, dt, params,
-               iteration_num);
-                        }
-            */
-            if (dump_viz_data && uses_visit && (iteration_num % viz_dump_interval == 0 || last_step))
-            {
-                pout << "\nWriting visualization files...\n\n";
-                time_integrator->setupPlotData();
-                visit_data_writer->writePlotData(patch_hierarchy, iteration_num, loop_time);
-                silo_data_writer->writePlotData(iteration_num, loop_time);
-                calculatePitchAndRadius(patch_hierarchy, ib_method_ops->getLDataManager(), loop_time, iteration_num);
-                calculateTorque(patch_hierarchy, ib_method_ops->getLDataManager(), loop_time, iteration_num);
-            }
             if (dump_restart_data && (iteration_num % restart_dump_interval == 0 || last_step))
             {
                 pout << "\nWriting restart files...\n\n";
@@ -643,6 +653,7 @@ calculatePitchAndRadius(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
         system("mkdir -p pitch");
         file_name << "pitch/Pitch_" << iteration_num << ".out";
         pitch_file.open(file_name.str().c_str());
+        pitch_file << loop_time << "\n";
         for (const auto& pitch_rad : pitch_rad_vals_reduced)
         {
             pitch_file << pitch_rad.idx << " " << pitch_rad.R << " " << pitch_rad.P << "\n";
@@ -678,8 +689,10 @@ void
 calculateTorque(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
                 LDataManager* l_data_manager,
                 const double loop_time,
-                const int iteration_num)
+                const int iteration_num,
+                Pointer<IBBistableRodForceGen> ib_force_fcn)
 {
+#if (0)
     // Output the torque on the motor. Note GeneralizedIBMethod does not save torque between time steps. This is why
     // BistableGenIBMethod is introduced.
     const int ln = patch_hierarchy->getFinestLevelNumber();
@@ -707,6 +720,10 @@ calculateTorque(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
         }
     }
     SAMRAI_MPI::sumReduction(&torque[0], NDIM);
+#endif
+#if (1)
+    VectorNd torque = ib_force_fcn->getTorque();
+#endif
 
     if (SAMRAI_MPI::getRank() == 0)
     {
@@ -715,6 +732,7 @@ calculateTorque(Pointer<PatchHierarchy<NDIM> > patch_hierarchy,
         system("mkdir -p torque");
         file_name << "torque/Torque_" << iteration_num << ".out";
         torque_file.open(file_name.str().c_str());
+        torque_file << loop_time << "\n";
         torque_file << torque[0] << " " << torque[1] << " " << torque[2] << "\n";
         torque_file.close();
     }
