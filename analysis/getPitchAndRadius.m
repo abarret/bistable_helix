@@ -13,9 +13,10 @@ dt = 1.0e-7;
 pr = zeros(3, length(files),length(idxs));
 for i = 1:length(files)
     % Determine time
-    time = dt * str2double(regexp(files{i}, '\d+', 'match', 'once'));
+    %time = dt * str2double(regexp(files{i}, '\d+', 'match', 'once'));
     fileID = fopen(base_path + "/" + files{i}, 'r');
     % Should be many lines consisting of three elements. Read it.
+    time = str2double(fgetl(fileID));
     data = fscanf(fileID, '%f %f %f', [3, inf]);
     % Grab 
     fclose(fileID);
