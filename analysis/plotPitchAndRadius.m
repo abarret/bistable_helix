@@ -10,8 +10,10 @@ legends = ["N1"];
 colors = {[0 0 0]};
 plot_styles = {"-."};
 
-De_strs = ["0.5"];
-alpha_strs = ["0.0", "0.001", "0.01", "0.05", "0.1", "0.3"];
+alpha_strs = ["0.01"];
+De_strs = ["1.0", "1.5", "2.0"];
+%De_strs = ["1.0"];
+%alpha_strs = ["0.0", "0.001", "0.01", "0.05", "0.1", "0.3"];
 
 i = 1;
 for alpha_str = alpha_strs
@@ -35,8 +37,9 @@ for i = 1:length(paths)
     base_path = paths(i) + "/pitch";
     fprintf("getting pitch from " + base_path + "\n");
     prs = getPitchAndRadius(base_path, [50, 100]);
-    prs(3,:) = smoothdata(prs(3,:), 'gaussian', 6);
-    prs(2,:) = smoothdata(prs(2,:), 'gaussian', 6);
+    prs = prs(:,1:end,:);
+    %prs(3,:) = smoothdata(prs(3,:), 'gaussian', 6);
+    %prs(2,:) = smoothdata(prs(2,:), 'gaussian', 6);
     
     nexttile(1); hold on;
     plot(prs(1,:,1), abs(prs(3,:,1)), plot_styles{i}, 'linewidth', 4, 'Color', colors{i});
